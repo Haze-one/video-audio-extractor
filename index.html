@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>视频音频分离工具</title>
+  <script src="coi-serviceworker.js"></script>
+  <style>
+    :root {
+      --bg: #0f0f0f;
+      --surface: #1a1a1a;
+      --surface-2: #252525;
+      --surface-3: #2e2e2e;
+      --border: #333;
+      --border-hover: #444;
+      --text: #e0e0e0;
+      --text-muted: #888;
+      --text-dim: #666;
+      --accent: #4a9eff;
+      --accent-hover: #3a8eef;
+      --accent-dim: #2a5a8a;
+      --success: #4caf50;
+      --error: #f44336;
+      --warning: #ff9800;
+      --radius: 10px;
+      --shadow: 0 2px 8px rgba(0,0,0,0.3);
+      --transition: 0.2s ease;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 640px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      padding: 8px 0 4px;
+    }
+    .header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+    .header p {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* Upload Zone */
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 40px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: var(--transition);
+      background: var(--surface);
+      position: relative;
+    }
+    .upload-zone:hover,
+    .upload-zone.dragover {
+      border-color: var(--accent);
+      background: var(--surface-2);
+    }
+    .upload-zone .upload-icon {
+      font-size: 36px;
+      color: var(--text-dim);
+      margin-bottom: 12px;
+      line-height: 1;
+    }
+    .upload-zone p {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+    .upload-zone .upload-hint {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-top: 6px;
+    }
+    .upload-zone input[type="file"] {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      top: 0; left: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    /* File Info Card */
+    .file-info {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .file-info .file-icon {
+      width: 44px; height: 44px;
+      border-radius: 8px;
+      background: var(--surface-3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+    .file-info .file-details {
+      flex: 1;
+      min-width: 0;
+    }
+    .file-info .file-name {
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 4px;
+    }
+    .file-info .file-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .file-info .file-meta span {
+      white-space: nowrap;
+    }
+    .file-info .remove-btn {
+      width: 32px; height: 32px;
+      border-radius: 6px;
+      border: none;
+      background: var(--surface-3);
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: var(--transition);
+      flex-shrink: 0;
+    }
+    .file-info .remove-btn:hover {
+      background: var(--error);
+      color: #fff;
+    }
+
+    /* Settings */
+    .settings {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    .settings-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .settings-row + .settings-row {
+      margin-top: 12px;
+    }
+    .settings-label {
+      font-size: 14px;
+      font-weight: 600;
+      min-width: 60px;
+      flex-shrink: 0;
+    }
+    .seg-group {
+      display: flex;
+      gap: 0;
+      background: var(--surface-2);
+      border-radius: 8px;
+      padding: 3px;
+      flex: 1;
+    }
+    .seg-btn {
+      flex: 1;
+      padding: 8px 12px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: var(--transition);
+      text-align: center;
+    }
+    .seg-btn.active {
+      background: var(--accent);
+      color: #fff;
+    }
+    .seg-btn:hover:not(.active) {
+      color: var(--text);
+    }
+
+    /* Action Button */
+    .btn-primary {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: var(--radius);
+      background: var(--accent);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+    .btn-primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
+    .btn-primary:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    /* Progress */
+    .progress-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      text-align: center;
+    }
+    .progress-section .progress-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 14px;
+    }
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: var(--surface-3);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+    .progress-bar .progress-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 4px;
+      transition: width 0.3s ease;
+      width: 0%;
+    }
+    .progress-section .progress-text {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Result */
+    .result-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+    .result-section .result-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .result-section audio {
+      width: 100%;
+      margin-bottom: 16px;
+      border-radius: 8px;
+    }
+    .result-section .result-info {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+    .result-actions {
+      display: flex;
+      gap: 10px;
+    }
+    .btn-download {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      background: var(--success);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition);
+      text-decoration: none;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .btn-download:hover {
+      opacity: 0.85;
+    }
+    .btn-reset {
+      flex: 1;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+    .btn-reset:hover {
+      border-color: var(--border-hover);
+      color: var(--text);
+    }
+
+    /* Loading overlay for FFmpeg core */
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+      gap: 16px;
+    }
+    .loading-overlay .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--surface-3);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    .loading-overlay p {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Error message */
+    .error-msg {
+      background: rgba(244,67,54,0.1);
+      border: 1px solid rgba(244,67,54,0.3);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 13px;
+      color: var(--error);
+      line-height: 1.5;
+    }
+
+    /* Responsive */
+    @media (max-width: 480px) {
+      .header h1 { font-size: 18px; }
+      .settings-row { flex-direction: column; align-items: flex-start; }
+      .settings-label { margin-bottom: 4px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Header -->
+  <div class="header">
+    <h1>视频音频分离工具</h1>
+    <p>上传视频，提取音频，一键下载</p>
+  </div>
+
+  <!-- Upload Zone -->
+  <div class="upload-zone" id="uploadZone">
+    <div class="upload-icon">[ + ]</div>
+    <p>拖拽视频到这里，或点击选择文件</p>
+    <p class="upload-hint">支持 MP4 / MOV / AVI / MKV / WebM 等格式</p>
+    <input type="file" id="fileInput" accept="video/*">
+  </div>
+
+  <!-- File Info -->
+  <div class="file-info" id="fileInfo" style="display:none;">
+    <div class="file-icon">video</div>
+    <div class="file-details">
+      <div class="file-name" id="fileName"></div>
+      <div class="file-meta">
+        <span id="fileSize"></span>
+        <span id="fileDuration"></span>
+      </div>
+    </div>
+    <button class="remove-btn" id="removeBtn" title="移除文件">x</button>
+  </div>
+
+  <!-- Settings -->
+  <div class="settings" id="settings" style="display:none;">
+    <div class="settings-row">
+      <span class="settings-label">格式</span>
+      <div class="seg-group" id="formatGroup">
+        <button class="seg-btn active" data-value="mp3">MP3</button>
+        <button class="seg-btn" data-value="wav">WAV</button>
+      </div>
+    </div>
+    <div class="settings-row" id="bitrateRow">
+      <span class="settings-label">音质</span>
+      <div class="seg-group" id="bitrateGroup">
+        <button class="seg-btn" data-value="128k">标准 128k</button>
+        <button class="seg-btn active" data-value="192k">高清 192k</button>
+        <button class="seg-btn" data-value="320k">超高 320k</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Extract Button -->
+  <button class="btn-primary" id="extractBtn" style="display:none;">提取音频</button>
+
+  <!-- Progress -->
+  <div class="progress-section" id="progressSection" style="display:none;">
+    <div class="progress-title" id="progressTitle">正在提取音频...</div>
+    <div class="progress-bar">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+    <div class="progress-text" id="progressText">准备中...</div>
+  </div>
+
+  <!-- Error -->
+  <div class="error-msg" id="errorMsg" style="display:none;"></div>
+
+  <!-- Result -->
+  <div class="result-section" id="resultSection" style="display:none;">
+    <div class="result-title">提取完成</div>
+    <audio id="audioPlayer" controls></audio>
+    <div class="result-info" id="resultInfo"></div>
+    <div class="result-actions">
+      <a class="btn-download" id="downloadBtn" download>下载音频</a>
+      <button class="btn-reset" id="resetBtn">重新开始</button>
+    </div>
+  </div>
+</div>
+
+<!-- FFmpeg Loading Overlay -->
+<div class="loading-overlay" id="loadingOverlay" style="display:none;">
+  <div class="spinner"></div>
+  <p id="loadingText">正在加载处理引擎...</p>
+</div>
+
+<script src="lib/ffmpeg.umd.js"></script>
+<script>
+const { FFmpeg } = FFmpegWASM;
+
+// fetchFile replacement — reads File/Blob into Uint8Array
+// (replaces @ffmpeg/util which uses CommonJS require() incompatible with browser)
+async function fetchFile(file) {
+  const buf = await file.arrayBuffer();
+  return new Uint8Array(buf);
+}
+
+const ffmpeg = new FFmpeg();
+
+// State
+let currentFile = null;
+let outputFormat = 'mp3';
+let outputBitrate = '192k';
+let ffmpegLoaded = false;
+
+// DOM refs
+const uploadZone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+const fileInfo = document.getElementById('fileInfo');
+const fileName = document.getElementById('fileName');
+const fileSize = document.getElementById('fileSize');
+const fileDuration = document.getElementById('fileDuration');
+const removeBtn = document.getElementById('removeBtn');
+const settings = document.getElementById('settings');
+const bitrateRow = document.getElementById('bitrateRow');
+const formatGroup = document.getElementById('formatGroup');
+const bitrateGroup = document.getElementById('bitrateGroup');
+const extractBtn = document.getElementById('extractBtn');
+const progressSection = document.getElementById('progressSection');
+const progressTitle = document.getElementById('progressTitle');
+const progressFill = document.getElementById('progressFill');
+const progressText = document.getElementById('progressText');
+const errorMsg = document.getElementById('errorMsg');
+const resultSection = document.getElementById('resultSection');
+const audioPlayer = document.getElementById('audioPlayer');
+const resultInfo = document.getElementById('resultInfo');
+const downloadBtn = document.getElementById('downloadBtn');
+const resetBtn = document.getElementById('resetBtn');
+const loadingOverlay = document.getElementById('loadingOverlay');
+const loadingText = document.getElementById('loadingText');
+
+// ---- File upload ----
+uploadZone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  uploadZone.classList.add('dragover');
+});
+uploadZone.addEventListener('dragleave', () => {
+  uploadZone.classList.remove('dragover');
+});
+uploadZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  uploadZone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFileSelect(file);
+});
+fileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (file) handleFileSelect(file);
+});
+
+function handleFileSelect(file) {
+  // Basic validation: check if it's a video
+  if (!file.type.startsWith('video/') && !/\.(mp4|mov|avi|mkv|webm|flv|wmv|m4v|ts|mpg|mpeg|m2ts)$/i.test(file.name)) {
+    showError('请选择视频文件');
+    return;
+  }
+
+  currentFile = file;
+  errorMsg.style.display = 'none';
+  resultSection.style.display = 'none';
+
+  // Show file info
+  fileName.textContent = file.name;
+  fileSize.textContent = formatSize(file.size);
+
+  // Get duration via a temporary video element
+  const tempVideo = document.createElement('video');
+  tempVideo.preload = 'metadata';
+  tempVideo.onloadedmetadata = () => {
+    fileDuration.textContent = formatDuration(tempVideo.duration);
+  };
+  tempVideo.onerror = () => {
+    fileDuration.textContent = '';
+  };
+  tempVideo.src = URL.createObjectURL(file);
+
+  fileInfo.style.display = 'flex';
+  uploadZone.style.display = 'none';
+  settings.style.display = 'block';
+  extractBtn.style.display = 'block';
+}
+
+removeBtn.addEventListener('click', resetAll);
+
+// ---- Format/Bitrate selection ----
+formatGroup.addEventListener('click', (e) => {
+  if (!e.target.classList.contains('seg-btn')) return;
+  formatGroup.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+  e.target.classList.add('active');
+  outputFormat = e.target.dataset.value;
+  // Show/hide bitrate row
+  bitrateRow.style.display = outputFormat === 'mp3' ? 'flex' : 'none';
+});
+bitrateGroup.addEventListener('click', (e) => {
+  if (!e.target.classList.contains('seg-btn')) return;
+  bitrateGroup.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+  e.target.classList.add('active');
+  outputBitrate = e.target.dataset.value;
+});
+
+// ---- FFmpeg loading ----
+async function ensureFFmpegLoaded() {
+  if (ffmpegLoaded) return;
+
+  loadingOverlay.style.display = 'flex';
+  loadingText.textContent = '正在加载处理引擎，首次加载约 30MB...';
+
+  // Progress callback
+  ffmpeg.on('progress', ({ progress, time }) => {
+    const pct = Math.round(progress * 100);
+    progressFill.style.width = pct + '%';
+    progressText.textContent = pct + '%  /  ' + formatDuration(time);
+  });
+
+  ffmpeg.on('log', ({ message }) => {
+    // Optional: can log for debugging
+    // console.log('ffmpeg log:', message);
+  });
+
+  await ffmpeg.load({
+    corePath: 'lib/core/ffmpeg-core.js',
+    wasmPath: 'lib/core/ffmpeg-core.wasm',
+  });
+
+  ffmpegLoaded = true;
+  loadingOverlay.style.display = 'none';
+}
+
+// ---- Extract ----
+extractBtn.addEventListener('click', async () => {
+  if (!currentFile) return;
+
+  extractBtn.disabled = true;
+  errorMsg.style.display = 'none';
+  resultSection.style.display = 'none';
+  progressSection.style.display = 'block';
+  progressFill.style.width = '0%';
+  progressText.textContent = '准备中...';
+  progressTitle.textContent = '正在加载处理引擎...';
+
+  try {
+    await ensureFFmpegLoaded();
+
+    progressTitle.textContent = '正在提取音频...';
+
+    // Write input file
+    const inputName = 'input_' + Date.now() + '.' + getFileExtension(currentFile.name);
+    const outputName = 'output_' + Date.now() + '.' + outputFormat;
+
+    await ffmpeg.writeFile(inputName, await fetchFile(currentFile));
+
+    // Build FFmpeg command
+    const args = ['-i', inputName, '-vn'];
+    if (outputFormat === 'mp3') {
+      args.push('-codec:a', 'libmp3lame', '-b:a', outputBitrate);
+    }
+    // WAV: default pcm_s16le, no extra args needed
+    args.push(outputName);
+
+    await ffmpeg.exec(args);
+
+    // Read output
+    const data = await ffmpeg.readFile(outputName);
+    const blob = new Blob([data.buffer], { type: outputFormat === 'mp3' ? 'audio/mpeg' : 'audio/wav' });
+    const url = URL.createObjectURL(blob);
+
+    // Show result
+    progressSection.style.display = 'none';
+    resultSection.style.display = 'block';
+    audioPlayer.src = url;
+
+    const outputExt = outputFormat === 'mp3' ? 'mp3' : 'wav';
+    const baseName = currentFile.name.replace(/\.[^.]+$/, '');
+    downloadBtn.href = url;
+    downloadBtn.download = baseName + '.' + outputExt;
+
+    resultInfo.textContent = '格式: ' + outputFormat.toUpperCase() + (outputFormat === 'mp3' ? ' / ' + outputBitrate : ' / 无损') + '  |  大小: ' + formatSize(blob.size);
+
+    // Clean up FFmpeg FS
+    try { await ffmpeg.deleteFile(inputName); } catch {}
+    try { await ffmpeg.deleteFile(outputName); } catch {}
+
+  } catch (err) {
+    console.error('Extract error:', err);
+    progressSection.style.display = 'none';
+    showError('提取失败：' + (err.message || '未知错误') + '。请检查视频文件是否完整或更换浏览器重试。');
+  } finally {
+    extractBtn.disabled = false;
+  }
+});
+
+// ---- Reset ----
+resetBtn.addEventListener('click', resetAll);
+
+function resetAll() {
+  currentFile = null;
+  fileInput.value = '';
+  fileInfo.style.display = 'none';
+  settings.style.display = 'none';
+  extractBtn.style.display = 'none';
+  progressSection.style.display = 'none';
+  resultSection.style.display = 'none';
+  errorMsg.style.display = 'none';
+  uploadZone.style.display = 'block';
+  if (audioPlayer.src) {
+    URL.revokeObjectURL(audioPlayer.src);
+    audioPlayer.src = '';
+  }
+}
+
+// ---- Utils ----
+function showError(msg) {
+  errorMsg.textContent = msg;
+  errorMsg.style.display = 'block';
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+}
+
+function formatDuration(sec) {
+  if (!sec || isNaN(sec)) return '';
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return m + ':' + s.toString().padStart(2, '0');
+}
+
+function getFileExtension(filename) {
+  const parts = filename.split('.');
+  return parts.length > 1 ? parts.pop().toLowerCase() : 'mp4';
+}
+</script>
+
+</body>
+</html>
